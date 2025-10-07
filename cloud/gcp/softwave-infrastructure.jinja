@@ -1,0 +1,86 @@
+{# Google Cloud Deployment Manager Jinja Template #}
+
+resources:
+# VPC Network
+- name: {{ properties['projectName'] }}-network
+  type: compute.v1.network
+  properties:
+    autoCreateSubnetworks: false
+
+# Subnet
+- name: {{ properties['projectName'] }}-subnet
+  type: compute.v1.subnetwork
+  properties:
+    network: $(ref.{{ properties['projectName'] }}-network.selfLink)
+    ipCidrRange: 10.0.0.0/24
+    region: {{ properties['region'] }}
+    privateIpGoogleAccess: true
+
+# Cloud SQL Instance
+- name: {{ properties['projectName'] }}-db
+  type: sqladmin.v1beta4.instance
+  properties:
+    region: {{ properties['region'] }}
+    databaseVersion: {{ properties['databaseVersion'] }}
+    settings:
+      tier: {{ properties['databaseTier'] }}
+      backupConfiguration:
+        enabled: true
+        startTime: "03:00"
+      ipConfiguration:
+        ipv4Enabled: true
+        authorizedNetworks:
+        - value: "0.0.0.0/0"
+          name: "all"
+      locationPreference:
+        zone: {{ properties['zone'] }}
+      dataDiskType: PD_SSD
+      dataDiskSizeGb: 10
+
+# Cloud SQL Database
+- name: {{ properties['projectName'] }}-database
+  type: sqladmin.v1beta4.database
+  properties:
+    name: softwave
+    instance: $(ref.{{ properties['projectName'] }}-db.name)
+    charset: UTF8
+
+# Cloud SQL User
+- name: {{ properties['projectName'] }}-db-user
+  type: sqladmin.v1beta4.user
+  properties:
+    name: softwave_user
+    instance: $(ref.{{ properties['projectName'] }}-db.name)
+    password: CHANGE_ME_IN_PRODUCTION
+
+# Memorystore Redis Instance
+- name: {{ properties['projectName'] }}-redis
+  type: redis.v1.instance
+  properties:
+    tier: BASIC
+    memorySizeGb: {{ properties['redisMemorySizeGb'] }}
+    region: {{ properties['region'] }}
+    redisVersion: {{ properties['redisVersion'] }}
+    authorizedNetwork: $(ref.{{ properties['projectName'] }}-network.selfLink)
+    connectMode: PRIVATE_SERVICE_ACCESS
+
+# Firewall Rules
+- name: {{ properties['projectName'] }}-allow-http
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.{{ properties['projectName'] }}-network.selfLink)
+    allowed:
+    - IPProtocol: TCP
+      ports: ["80", "443", "3000"]
+    sourceRanges: ["0.0.0.0/0"]
+    targetTags: ["http-server"]
+
+outputs:
+- name: databaseInstance
+  value: $(ref.{{ properties['projectName'] }}-db.name)
+- name: databaseConnectionName
+  value: $(ref.{{ properties['projectName'] }}-db.connectionName)
+- name: redisHost
+  value: $(ref.{{ properties['projectName'] }}-redis.host)
+- name: redisPort
+  value: $(ref.{{ properties['projectName'] }}-redis.port)
