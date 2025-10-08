@@ -1,0 +1,17 @@
+# Google Cloud Deployment Manager Template
+# Deploy using: gcloud deployment-manager deployments create softwave --config deployment-manager.yaml
+
+imports:
+- path: softwave-infrastructure.jinja
+
+resources:
+- name: softwave-infrastructure
+  type: softwave-infrastructure.jinja
+  properties:
+    zone: us-central1-a
+    region: us-central1
+    projectName: softwave
+    databaseTier: db-f1-micro
+    databaseVersion: POSTGRES_15
+    redisMemorySizeGb: 1
+    redisVersion: REDIS_7_0
