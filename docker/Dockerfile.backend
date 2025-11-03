@@ -1,0 +1,60 @@
+# Dockerfile genérico para Backend Spring Boot
+# Multi-stage build para otimização
+# 
+# USO: 
+#   docker build -f Dockerfile.backend \
+#     --build-arg JAR_FILE=backend-SoftWave-0.0.2-SNAPSHOT.jar \
+#     --build-arg SERVICE_PORT=8081 \
+#     -t softwave/backend:latest .
+
+# Estágio 1: Build da aplicação (usar Maven ou copiar JAR já buildado)
+FROM maven:3.9-eclipse-temurin-21-alpine AS builder
+
+WORKDIR /app
+
+# Se usar Maven para build (descomente e ajuste)
+# COPY pom.xml .
+# COPY src ./src
+# RUN mvn clean package -DskipTests
+
+# OU copiar JAR já buildado (recomendado para produção)
+ARG JAR_FILE
+COPY ${JAR_FILE} app.jar
+
+# Estágio 2: Runtime
+FROM eclipse-temurin:21-jre-alpine
+
+LABEL maintainer="SoftWave Team"
+LABEL description="Backend Spring Boot Application"
+
+# Criar usuário não-root
+RUN addgroup -g 1001 -S spring && \
+    adduser -u 1001 -S spring -G spring
+
+# Instalar curl para healthcheck
+RUN apk add --no-cache curl
+
+WORKDIR /app
+
+# Copiar JAR do estágio anterior ou diretamente
+ARG JAR_FILE
+COPY --from=builder /app/app.jar app.jar
+# OU se copiou diretamente:
+# COPY ${JAR_FILE} app.jar
+
+RUN chown -R spring:spring /app
+
+USER spring
+
+ARG SERVICE_PORT=8080
+EXPOSE ${SERVICE_PORT}
+
+# JVM Options para container
+ENV JAVA_OPTS="-Xmx512m -Xms256m -Djava.security.egd=file:/dev/./urandom"
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:${SERVICE_PORT}/actuator/health || exit 1
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+

@@ -1,0 +1,155 @@
+# Configuração Nginx para quando TODOS os serviços rodam na MESMA EC2 via Docker Compose
+# Use esta configuração se você decidir rodar todos os serviços em uma única EC2
+# Arquivo: nginx.conf.docker
+
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log warn;
+pid /var/run/nginx.pid;
+
+events {
+    worker_connections 1024;
+    use epoll;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log /var/log/nginx/access.log main;
+
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+    client_max_body_size 25M;
+
+    # ============================================
+    # UPSTREAMS - Todos na mesma EC2 (localhost)
+    # ============================================
+    # Backend Principal - Balanceamento local entre portas
+    upstream backend_apis {
+        least_conn;
+        server localhost:8081 max_fails=3 fail_timeout=30s weight=1;
+        server localhost:8082 max_fails=3 fail_timeout=30s weight=1;
+        keepalive 32;
+    }
+
+    # Serviços auxiliares - Todos em localhost (mesma EC2)
+    upstream s3_service {
+        server localhost:8081 max_fails=3 fail_timeout=30s;
+        keepalive 16;
+    }
+
+    upstream auth_service {
+        server localhost:8083 max_fails=3 fail_timeout=30s;
+        keepalive 16;
+    }
+
+    upstream gemini_service {
+        server localhost:8082 max_fails=3 fail_timeout=30s;
+        keepalive 16;
+    }
+
+    upstream consultas_service {
+        server localhost:8084 max_fails=3 fail_timeout=30s;
+        keepalive 16;
+    }
+
+    # Servidor principal
+    server {
+        listen 80;
+        server_name _;
+        
+        # Headers de segurança
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+
+        # Frontend React
+        location / {
+            root /var/www/softwave-frontend;
+            try_files $uri $uri/ /index.html;
+            index index.html;
+            
+            location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+                expires 1y;
+                add_header Cache-Control "public, immutable";
+                access_log off;
+            }
+        }
+
+        # API Backend Principal
+        location /api/ {
+            rewrite ^/api/(.*)$ /$1 break;
+            proxy_pass http://backend_apis;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 300s;
+            proxy_connect_timeout 75s;
+        }
+
+        # API S3 Service
+        location /api/s3 {
+            rewrite ^/api/s3/(.*)$ /$1 break;
+            proxy_pass http://s3_service;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_read_timeout 600s;
+            client_max_body_size 10M;
+        }
+
+        # API Auth Service
+        location /api/auth {
+            rewrite ^/api/auth/(.*)$ /$1 break;
+            proxy_pass http://auth_service;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_read_timeout 300s;
+        }
+
+        # API Gemini Service
+        location /api/gemini {
+            rewrite ^/api/gemini/(.*)$ /$1 break;
+            proxy_pass http://gemini_service;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_read_timeout 600s;
+        }
+
+        # API Consultas Service
+        location /api/consultas {
+            rewrite ^/api/consultas/(.*)$ /$1 break;
+            proxy_pass http://consultas_service;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_read_timeout 300s;
+        }
+
+        # Healthcheck
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+    }
+}
+
