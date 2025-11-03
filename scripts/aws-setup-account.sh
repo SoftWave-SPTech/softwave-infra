@@ -37,10 +37,17 @@ aws() {
 }
 
 # --- Variáveis ---
+DEBUG="${DEBUG:-0}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 ENVIRONMENT="${ENV:-prod}"
 ECR_PREFIX="${ECR_PREFIX:-softwave}"
 ACCOUNT_ID=""
+
+# Debug opcional
+if [[ "$DEBUG" == "1" ]]; then
+  set -x
+  log "DEBUG habilitado"
+fi
 
 # Repositórios/order fixo para imagens
 REPOS=(
@@ -60,9 +67,16 @@ fi
 
 # Validar credenciais
 log "Validando credenciais AWS..."
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || true)
+# 1ª tentativa: normal (mostra erros se houver)
+if ! ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>&1); then
+  err "Falha ao consultar STS. Se usar SSO, rode: 'aws sso login --profile $AWS_PROFILE' (se aplicável)."
+  err "Saída do comando: $ACCOUNT_ID"
+  exit 1
+fi
+# Se a saída trouxe mensagens junto (ex.: warnings), filtrar apenas o número da conta
+ACCOUNT_ID="$(echo "$ACCOUNT_ID" | tr -dc '0-9')"
 if [[ -z "$ACCOUNT_ID" || "$ACCOUNT_ID" == "None" ]]; then
-  err "Não foi possível obter o Account ID. Configure 'aws configure' ou variáveis de ambiente."
+  err "Não foi possível obter o Account ID. Verifique suas credenciais (AWS_PROFILE, variáveis ou SSO)."
   exit 1
 fi
 log "Account ID: $ACCOUNT_ID | Região: $AWS_REGION | Ambiente: $ENVIRONMENT"
