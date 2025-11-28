@@ -310,3 +310,4 @@ http {
 
 **Resumo Final:** O `nginx.conf` é uma configuração **completa, otimizada e pronta para produção** que suporta toda a arquitetura multi-microserviços com balanceamento. O `nginx2.conf` é um **fragmento incompleto** que não está alinhado com a arquitetura especificada e precisa de correções significativas para funcionar.
 
+

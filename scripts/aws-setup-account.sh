@@ -69,7 +69,7 @@ fi
 log "Validando credenciais AWS..."
 # 1ª tentativa: normal (mostra erros se houver)
 if ! ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>&1); then
-  err "Falha ao consultar STS. Se usar SSO, rode: 'aws sso login --profile $AWS_PROFILE' (se aplicável)."
+  err "Falha ao consultar STS. Se usar SSO, rode: 'aws sso login --profile <seu-perfil>' (se aplicável)."
   err "Saída do comando: $ACCOUNT_ID"
   exit 1
 fi
