@@ -1,0 +1,36 @@
+[Unit]
+Description=SoftWave Docker Compose - Todos os serviços backend
+Documentation=https://github.com/SoftWave-SPTech/softwave-infra
+Requires=docker.service
+After=docker.service network.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=ec2-user
+Group=docker
+WorkingDirectory=/opt/softwave
+EnvironmentFile=/opt/softwave/.env
+
+# Comando para iniciar todos os serviços
+ExecStart=/usr/local/bin/docker-compose -f /opt/softwave/docker-compose.prod.yml up -d
+
+# Comando para parar todos os serviços
+ExecStop=/usr/local/bin/docker-compose -f /opt/softwave/docker-compose.prod.yml down
+
+# Reiniciar em caso de falha
+Restart=on-failure
+RestartSec=10
+
+# Timeout para iniciar (5 minutos)
+TimeoutStartSec=300
+
+# Logs
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=softwave-docker
+
+[Install]
+WantedBy=multi-user.target
+

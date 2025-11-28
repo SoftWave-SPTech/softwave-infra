@@ -1,298 +1,247 @@
-# SoftWave Infrastructure
+# SoftWave Infraestrutura - Deploy e Configuração
 
-Infraestrutura do projeto SoftWave, contendo Docker, Docker Compose, shell scripts e configurações para deploy em ambientes de nuvem (AWS, Azure, GCP).
+Configurações de infraestrutura, Docker, Nginx e deploy em produção para o sistema SoftWave.
 
-## 📋 Índice
+## Tecnologias Utilizadas
 
-- [Visão Geral](#visão-geral)
-- [Pré-requisitos](#pré-requisitos)
-- [Início Rápido](#início-rápido)
-- [Estrutura do Projeto](#estrutura-do-projeto)
-- [Comandos Disponíveis](#comandos-disponíveis)
-- [Ambientes de Nuvem](#ambientes-de-nuvem)
-- [Desenvolvimento](#desenvolvimento)
-- [Variáveis de Ambiente](#variáveis-de-ambiente)
+![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
+![Nginx](https://img.shields.io/badge/nginx-%23009639.svg?style=for-the-badge&logo=nginx&logoColor=white)
+![AWS](https://img.shields.io/badge/AWS-%23FF9900.svg?style=for-the-badge&logo=amazon-aws&logoColor=white)
+![Shell Script](https://img.shields.io/badge/shell_script-%23121011.svg?style=for-the-badge&logo=gnu-bash&logoColor=white)
 
-## 🎯 Visão Geral
+### Componentes
 
-Este repositório contém toda a infraestrutura necessária para executar o projeto SoftWave, incluindo:
+- **Docker & Docker Compose** - Containerização
+- **Nginx** - Proxy reverso e load balancer
+- **AWS EC2** - Hospedagem em nuvem
+- **Systemd** - Gerenciamento de serviços
+- **Shell Scripts** - Automação de deploy
 
-- **Docker**: Containerização da aplicação
-- **Docker Compose**: Orquestração de múltiplos serviços (app, PostgreSQL, Redis, Nginx)
-- **Shell Scripts**: Automação de inicialização, start e stop
-- **Configurações Cloud**: Templates para AWS, Azure e GCP
-
-## 🔧 Pré-requisitos
-
-- [Docker](https://docs.docker.com/get-docker/) (versão 20.10 ou superior)
-- [Docker Compose](https://docs.docker.com/compose/install/) (versão 2.0 ou superior)
-- Git
-
-Para deploy em nuvem, você também precisará:
-- **AWS**: [AWS CLI](https://aws.amazon.com/cli/)
-- **Azure**: [Azure CLI](https://docs.microsoft.com/cli/azure/install-azure-cli)
-- **GCP**: [gcloud CLI](https://cloud.google.com/sdk/docs/install)
-
-## 🚀 Início Rápido
-
-### 1. Clone o repositório
-
-```bash
-git clone https://github.com/SoftWave-SPTech/softwave-infra.git
-cd softwave-infra
-```
-
-### 2. Inicialize o ambiente
-
-```bash
-./init.sh
-```
-
-Este script irá:
-- Verificar se Docker e Docker Compose estão instalados
-- Criar diretórios necessários
-- Criar arquivo `.env` com valores padrão
-- Criar `scripts/init.sql` para inicialização do banco
-- Criar configuração do Nginx
-- Fazer pull das imagens Docker
-
-### 3. Configure as variáveis de ambiente
-
-Edite o arquivo `.env` gerado com suas configurações:
-
-```bash
-nano .env
-```
-
-### 4. Inicie os serviços
-
-```bash
-./start.sh
-```
-
-### 5. Acesse a aplicação
-
-- **Aplicação**: http://localhost:3000
-- **Nginx Proxy**: http://localhost:80
-- **PostgreSQL**: localhost:5432
-- **Redis**: localhost:6379
-
-## 📁 Estrutura do Projeto
+## Estrutura do Projeto
 
 ```
 softwave-infra/
-├── Dockerfile                      # Imagem Docker da aplicação
-├── docker-compose.yml              # Orquestração de serviços (produção)
-├── docker-compose.dev.yml          # Orquestração para desenvolvimento
-├── .env.example                    # Exemplo de variáveis de ambiente
-├── .gitignore                      # Arquivos ignorados pelo Git
-│
-├── init.sh                         # Script de inicialização
-├── start.sh                        # Script para iniciar serviços
-├── stop.sh                         # Script para parar serviços
-│
-├── scripts/                        # Scripts SQL e outros
-│   └── init.sql                    # Inicialização do banco de dados
-│
-├── nginx/                          # Configurações do Nginx
-│   └── nginx.conf                  # Arquivo de configuração
-│
-└── cloud/                          # Configurações para nuvem
-    ├── aws/                        # Amazon Web Services
-    │   ├── cloudformation-template.yml
-    │   ├── ecs-task-definition.json
-    │   └── deploy.sh
-    │
-    ├── azure/                      # Microsoft Azure
-    │   ├── arm-template.json
-    │   ├── container-instance.yaml
-    │   └── deploy.sh
-    │
-    └── gcp/                        # Google Cloud Platform
-        ├── cloudrun-service.yaml
-        ├── deployment-manager.yaml
-        ├── softwave-infrastructure.jinja
-        └── deploy.sh
+├── docker/
+│   ├── Dockerfile.backend      # Dockerfile backend
+│   └── Dockerfile.generic      # Dockerfile genérico
+├── nginx/
+│   ├── nginx.conf             # Configuração local
+│   ├── nginx.conf.docker      # Configuração Docker
+│   └── README.md              # Documentação Nginx
+├── scripts/
+│   ├── aws-setup-account.sh   # Setup inicial AWS
+│   ├── bootstrap-backend.sh   # Deploy backend
+│   ├── bootstrap-nginx.sh     # Setup Nginx
+│   ├── build-all-images.sh    # Build todas imagens
+│   ├── build-and-push.sh      # Build e push Docker Hub
+│   ├── ec2-bootstrap-and-deploy.sh  # Deploy EC2 completo
+│   └── upload-config-to-s3.sh # Upload configs para S3
+├── systemd/
+│   └── softwave-docker-compose.service  # Serviço systemd
+├── docker-compose.prod.yml    # Compose produção
+└── README.md
 ```
 
-## 💻 Comandos Disponíveis
+## Configuração de Produção
 
-### Scripts Principais
+### Docker Compose Produção
+
+O arquivo `docker-compose.prod.yml` orquestra todos os microserviços:
+
+```yaml
+# Serviços configurados:
+# - backend-1 (porta 8081)
+# - backend-2 (porta 8082) - Load balancing
+# - auth-service (porta 8083)
+# - s3-service (porta 8091)
+# - gemini-service (porta 8092)
+# - consultas-service (porta 8084)
+```
+
+### Variáveis de Ambiente Necessárias
 
 ```bash
-# Inicializar o ambiente (primeira vez)
-./init.sh
+# Database
+SPRING_DATASOURCE_URL=jdbc:mysql://host:3306/softwave_db
+SPRING_DATASOURCE_USERNAME=softwave
+SPRING_DATASOURCE_PASSWORD=senha-segura
 
-# Iniciar todos os serviços em background
-./start.sh
+# JWT
+JWT_SECRET=seu-jwt-secret-super-seguro
+JWT_VALIDITY=3600
 
-# Iniciar serviços em foreground (ver logs)
-./start.sh --foreground
+# AWS
+AWS_ACCESS_KEY=sua-access-key
+AWS_SECRET_KEY=sua-secret-key
+AWS_REGION=us-east-1
+AWS_S3_BUCKET=softwave-arquivos-prod
 
-# Iniciar com rebuild das imagens
-./start.sh --build
+# Email
+MAIL_HOST=smtp.gmail.com
+MAIL_USERNAME=seu-email@gmail.com
+MAIL_PASSWORD=sua-senha-app
 
-# Iniciar apenas serviços específicos
-./start.sh app postgres
+# RabbitMQ
+RABBITMQ_HOST=seu-rabbitmq-host
+RABBITMQ_USERNAME=softwave
+RABBITMQ_PASSWORD=senha-rabbitmq
 
-# Parar todos os serviços
-./stop.sh
-
-# Parar e remover volumes
-./stop.sh --volumes
-
-# Parar, remover volumes e imagens
-./stop.sh --all
+# CORS
+CORS_ALLOWED_ORIGINS=https://seu-dominio.com
 ```
 
-### Docker Compose
+### Configuração Nginx
+
+O Nginx atua como proxy reverso e load balancer:
+
+```nginx
+# Load balancing para backend principal
+upstream backend_pool {
+    server backend-1:8081;
+    server backend-2:8082;
+}
+
+# Proxy para microserviços específicos
+location /auth/ {
+    proxy_pass http://auth-service:8083/;
+}
+
+location /s3/ {
+    proxy_pass http://s3-service:8091/;
+}
+```
+
+## Deploy AWS EC2
+
+### 1. Configuração Inicial
 
 ```bash
-# Ver logs de todos os serviços
-docker compose logs -f
+# Executar script de setup
+./scripts/aws-setup-account.sh
 
-# Ver logs de um serviço específico
-docker compose logs -f app
-
-# Ver status dos serviços
-docker compose ps
-
-# Executar comando em um container
-docker compose exec app sh
-
-# Acessar banco de dados
-docker compose exec postgres psql -U softwave_user -d softwave
-
-# Rebuild de um serviço específico
-docker compose up -d --build app
+# Configurar credenciais AWS
+aws configure
 ```
 
-## ☁️ Ambientes de Nuvem
-
-### AWS (Amazon Web Services)
-
-Deploy usando ECS (Elastic Container Service):
+### 2. Deploy Completo
 
 ```bash
-cd cloud/aws
+# Script completo de deploy
+./scripts/ec2-bootstrap-and-deploy.sh
 
-# Configure as variáveis de ambiente
-export AWS_REGION=us-east-1
-export ECR_REPOSITORY=softwave
-export ECS_CLUSTER=softwave-cluster
-
-# Execute o deploy
-./deploy.sh
+# Ou passos individuais:
+./scripts/build-all-images.sh
+./scripts/build-and-push.sh
+./scripts/bootstrap-nginx.sh
+./scripts/bootstrap-backend.sh
 ```
 
-Ou use CloudFormation para criar toda a infraestrutura:
+### 3. Configuração do Serviço Systemd
 
 ```bash
-aws cloudformation create-stack \
-  --stack-name softwave-infrastructure \
-  --template-body file://cloudformation-template.yml \
-  --parameters ParameterKey=DBPassword,ParameterValue=YourSecurePassword123
+# Copiar arquivo de serviço
+sudo cp systemd/softwave-docker-compose.service /etc/systemd/system/
+
+# Habilitar e iniciar serviço
+sudo systemctl enable softwave-docker-compose
+sudo systemctl start softwave-docker-compose
+
+# Verificar status
+sudo systemctl status softwave-docker-compose
 ```
 
-### Azure
+## Monitoramento
 
-Deploy usando Azure Container Instances ou App Service:
+### Health Checks
+
+Todos os serviços possuem health checks configurados:
 
 ```bash
-cd cloud/azure
+# Verificar status dos containers
+docker-compose -f docker-compose.prod.yml ps
 
-# Configure as variáveis
-export RESOURCE_GROUP=softwave-rg
-export LOCATION=eastus
-export ACR_NAME=softwaveacr
-
-# Execute o deploy
-./deploy.sh
+# Logs dos serviços
+docker-compose -f docker-compose.prod.yml logs backend-1
+docker-compose -f docker-compose.prod.yml logs nginx
 ```
 
-Ou use ARM Template:
+### Métricas
 
 ```bash
-az deployment group create \
-  --resource-group softwave-rg \
-  --template-file arm-template.json \
-  --parameters administratorLoginPassword="YourSecurePassword123"
+# CPU e memória dos containers
+docker stats
+
+# Logs do sistema
+journalctl -u softwave-docker-compose -f
 ```
 
-### GCP (Google Cloud Platform)
+## SSL/TLS
 
-Deploy usando Cloud Run:
+### Certificado Let's Encrypt
 
 ```bash
-cd cloud/gcp
+# Instalar Certbot
+sudo apt install certbot python3-certbot-nginx
 
-# Configure as variáveis
-export GCP_PROJECT_ID=your-project-id
-export GCP_REGION=us-central1
+# Obter certificado
+sudo certbot --nginx -d seu-dominio.com
 
-# Execute o deploy
-./deploy.sh
+# Renovação automática
+sudo systemctl enable certbot.timer
 ```
 
-Ou use Deployment Manager:
+## Troubleshooting
+
+### Problemas Comuns
+
+1. **Container não inicia**: Verificar logs e variáveis de ambiente
+2. **Nginx 502**: Verificar se backend está rodando
+3. **SSL não funciona**: Verificar certificados e configuração
+4. **Performance ruim**: Verificar recursos EC2 e otimizar
+
+### Comandos Úteis
 
 ```bash
-gcloud deployment-manager deployments create softwave \
-  --config deployment-manager.yaml
+# Reiniciar todos os serviços
+sudo systemctl restart softwave-docker-compose
+
+# Ver logs em tempo real
+docker-compose -f docker-compose.prod.yml logs -f
+
+# Verificar conectividade entre containers
+docker exec backend-1 ping auth-service
 ```
 
-## 🔨 Desenvolvimento
+## Atualizações
 
-Para desenvolvimento local com hot-reload:
+### Deploy de Nova Versão
 
 ```bash
-# Use o docker-compose de desenvolvimento
-docker compose -f docker-compose.dev.yml up
+# 1. Fazer pull das novas imagens
+docker-compose -f docker-compose.prod.yml pull
 
-# Acesse as ferramentas de desenvolvimento:
-# - PgAdmin: http://localhost:5050 (admin@softwave.com / admin)
-# - Redis Commander: http://localhost:8081
+# 2. Parar serviços
+docker-compose -f docker-compose.prod.yml down
+
+# 3. Iniciar com novas imagens
+docker-compose -f docker-compose.prod.yml up -d
+
+# 4. Verificar saúde dos serviços
+./scripts/health-check.sh
 ```
 
-## 🔐 Variáveis de Ambiente
+## Contribuição
 
-Principais variáveis de ambiente (veja `.env.example` para lista completa):
+1. Teste mudanças localmente primeiro
+2. Use scripts de automação para deploy
+3. Monitore logs após deploy
+4. Mantenha backups atualizados
 
-| Variável | Descrição | Padrão |
-|----------|-----------|--------|
-| `NODE_ENV` | Ambiente de execução | `development` |
-| `APP_PORT` | Porta da aplicação | `3000` |
-| `DB_HOST` | Host do PostgreSQL | `postgres` |
-| `DB_PORT` | Porta do PostgreSQL | `5432` |
-| `DB_NAME` | Nome do banco de dados | `softwave` |
-| `DB_USER` | Usuário do banco | `softwave_user` |
-| `DB_PASSWORD` | Senha do banco | `softwave_pass` |
-| `REDIS_HOST` | Host do Redis | `redis` |
-| `REDIS_PORT` | Porta do Redis | `6379` |
-| `JWT_SECRET` | Secret para JWT | - |
+## Licença
 
-**⚠️ IMPORTANTE**: Altere as senhas e secrets padrão em ambientes de produção!
+Este projeto é propriedade da SoftWave SPTech e destina-se ao uso exclusivo do escritório Lauriano & Leão Sociedade de Advogados.
 
-## 📝 Notas
+---
 
-- **Segurança**: Nunca commite arquivos `.env` com credenciais reais
-- **Produção**: Revise e ajuste as configurações de recursos (CPU, memória) para produção
-- **Backup**: Configure backups automáticos para os bancos de dados em produção
-- **Monitoramento**: Considere adicionar ferramentas de monitoramento (Prometheus, Grafana, etc.)
-- **SSL/TLS**: Configure certificados SSL para ambientes de produção
-
-## 🤝 Contribuindo
-
-1. Fork o projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
-3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-4. Push para a branch (`git push origin feature/AmazingFeature`)
-5. Abra um Pull Request
-
-## 📄 Licença
-
-Este projeto é parte do SoftWave e está sob a licença [inserir licença aqui].
-
-## 📧 Contato
-
-SoftWave Team - [@SoftWave-SPTech](https://github.com/SoftWave-SPTech)
+**Desenvolvido por:** SoftWave SPTech  
+**Data:** 2025

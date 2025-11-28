@@ -1,0 +1,66 @@
+# Dockerfile genérico para microserviços Spring Boot
+# Template reutilizável para todos os serviços
+#
+# USO:
+#   Para cada serviço, copie este arquivo e ajuste apenas:
+#   - SERVICE_NAME: nome do serviço
+#   - JAR_FILE: nome do arquivo JAR
+#   - SERVICE_PORT: porta do serviço
+
+# Estágio 1: Build (opcional - use se precisar compilar)
+FROM maven:3.9-eclipse-temurin-21-alpine AS builder
+
+WORKDIR /app
+
+# Para build Maven (descomente se necessário):
+# COPY pom.xml .
+# COPY src ./src
+# RUN mvn clean package -DskipTests
+
+# Para usar JAR pré-buildado (recomendado):
+ARG JAR_FILE
+COPY ${JAR_FILE} app.jar
+
+# Estágio 2: Runtime
+FROM eclipse-temurin:21-jre-alpine
+
+ARG SERVICE_NAME=spring-service
+ARG SERVICE_PORT=8080
+
+LABEL maintainer="SoftWave Team"
+LABEL service="${SERVICE_NAME}"
+LABEL description="Spring Boot Microservice - ${SERVICE_NAME}"
+
+# Criar usuário não-root
+RUN addgroup -g 1001 -S spring && \
+    adduser -u 1001 -S spring -G spring
+
+# Instalar dependências
+RUN apk add --no-cache curl bash
+
+WORKDIR /app
+
+# Copiar JAR
+COPY --from=builder /app/app.jar app.jar
+
+# Ajustar permissões
+RUN chown -R spring:spring /app
+
+USER spring
+
+EXPOSE ${SERVICE_PORT}
+
+# JVM Options otimizadas para containers
+ENV JAVA_OPTS="-Xmx512m -Xms256m \
+    -XX:+UseContainerSupport \
+    -XX:MaxRAMPercentage=75.0 \
+    -Djava.security.egd=file:/dev/./urandom \
+    -Dspring.backgroundpreinitializer.ignore=true"
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:${SERVICE_PORT}/actuator/health || exit 1
+
+# Comando de execução
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+
