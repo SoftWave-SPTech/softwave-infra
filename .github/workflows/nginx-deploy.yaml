@@ -8,30 +8,50 @@ on:
   pull_request: 
     branches: 
       [ "feature/document" ]
-
+      
 jobs:
-  deploy-nginx:
+  build-and-deploy-nginx:
     runs-on: ubuntu-latest
+    env:
+      DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      EC2_IP_A: ${{ secrets.EC2_IP_A }}
+      EC2_IP_B: ${{ secrets.EC2_IP_B }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - name: Build Docker image
+      - name: Install envsubst (gettext) for variable substitution
+        run: sudo apt-get update && sudo apt-get install -y gettext-base
+
+      - name: Prepare nginx.conf (inject EC2 IPs)
         run: |
-          docker build -t myuser/nginx-load-balancer:latest .
+          SRC_TEMPLATE="softwave-infra/nginx/nginx.conf"
+          if [ ! -f "$SRC_TEMPLATE" ]; then
+            echo "ERROR: template $SRC_TEMPLATE not found"; exit 1;
+          fi
+          # renderiza para arquivo final no mesmo local
+          envsubst '${EC2_IP_A} ${EC2_IP_B}' < "$SRC_TEMPLATE" > "${SRC_TEMPLATE}.rendered"
+          mv "${SRC_TEMPLATE}.rendered" "${SRC_TEMPLATE}"
+          echo "Rendered nginx.conf (first 60 lines):"
+          sed -n '1,60p' "${SRC_TEMPLATE}"
 
-      - name: Login to DockerHub
+      - name: Build Docker image (context = softwave-infra)
+        run: |
+          # build usando Dockerfile em softwave-infra/Dockerfile e context ./softwave-infra
+          docker build -f softwave-infra/Dockerfile -t ${DOCKERHUB_USER}/nginx-load-balancer:latest ./softwave-infra
+
+      - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push Docker image to DockerHub
+      - name: Push Docker image
         run: |
-          docker tag myuser/nginx-load-balancer:latest ${{ secrets.DOCKERHUB_USERNAME }}/nginx-load-balancer:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/nginx-load-balancer:latest
+          docker push ${DOCKERHUB_USER}/nginx-load-balancer:latest
 
-      - name: Deploy to EC2
+      - name: Deploy image to EC2 (EC2_IP_A)
         uses: appleboy/ssh-action@v0.1.8
         with:
           host: ${{ secrets.EC2_IP_A }}
@@ -39,8 +59,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/nginx-load-balancer:latest
+            docker pull ${DOCKERHUB_USER}/nginx-load-balancer:latest
             docker stop nginx-load-balancer || true
             docker rm nginx-load-balancer || true
-            docker run -d --name nginx-load-balancer -p 80:80 ${{ secrets.DOCKERHUB_USERNAME }}/nginx-load-balancer:latest
-
+            docker run -d --name nginx-load-balancer -p 80:80 ${DOCKERHUB_USER}/nginx-load-balancer:latest
