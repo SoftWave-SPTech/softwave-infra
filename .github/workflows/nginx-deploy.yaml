@@ -75,7 +75,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
-            sudo docker pull ${NGINX_IMG}
+            docker pull ${NGINX_IMG}
             sudo docker stop nginx-load-balancer || true
             sudo docker rm nginx-load-balancer || true
             sudo docker run -d --name nginx-load-balancer -p 80:80 ${NGINX_IMG}
@@ -89,7 +89,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
-            sudo docker pull ${FRONT_IMG}
+            docker pull ${FRONT_IMG}
             sudo docker stop frontend || true
             sudo docker rm frontend || true
             sudo docker run -d --name frontend -p 8080:80 ${FRONT_IMG}
@@ -102,7 +102,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
-            sudo docker pull ${FRONT_IMG}
+            docker pull ${FRONT_IMG}
             sudo docker stop frontend || true
             sudo docker rm frontend || true
             sudo docker run -d --name frontend -p 8080:80 ${FRONT_IMG}
