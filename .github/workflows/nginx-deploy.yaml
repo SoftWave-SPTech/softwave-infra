@@ -1,1 +1,46 @@
+name: Deploy Nginx Load Balancer
+
+on:
+  push: 
+    branches: 
+      [ "feature/document" ] 
+  
+  pull_request: 
+    branches: 
+      [ "feature/document" ]
+
+jobs:
+  deploy-nginx:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Build Docker image
+        run: |
+          docker build -t myuser/nginx-load-balancer:latest .
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: Push Docker image to DockerHub
+        run: |
+          docker tag myuser/nginx-load-balancer:latest ${{ secrets.DOCKERHUB_USERNAME }}/nginx-load-balancer:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/nginx-load-balancer:latest
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: ${{ secrets.EC2_IP_A }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/nginx-load-balancer:latest
+            docker stop nginx-load-balancer || true
+            docker rm nginx-load-balancer || true
+            docker run -d --name nginx-load-balancer -p 80:80 ${{ secrets.DOCKERHUB_USERNAME }}/nginx-load-balancer:latest
 
