@@ -65,7 +65,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Push Nginx image to Docker Hub
-        run: sudo docker push ${NGINX_IMG}
+        run: docker push ${NGINX_IMG}
 
       - name: Deploy Nginx on EC2_A (pull & run)
         uses: appleboy/ssh-action@v0.1.8
@@ -75,7 +75,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
-            docker pull ${NGINX_IMG}
+            sudo docker pull ${NGINX_IMG}
             sudo docker stop nginx-load-balancer || true
             sudo docker rm nginx-load-balancer || true
             sudo docker run -d --name nginx-load-balancer -p 80:80 ${NGINX_IMG}
@@ -89,7 +89,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
-            docker pull ${FRONT_IMG}
+            sudo docker pull ${FRONT_IMG}
             sudo docker stop frontend || true
             sudo docker rm frontend || true
             sudo docker run -d --name frontend -p 8080:80 ${FRONT_IMG}
@@ -102,7 +102,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
-            docker pull ${FRONT_IMG}
+            sudo docker pull ${FRONT_IMG}
             sudo docker stop frontend || true
             sudo docker rm frontend || true
             sudo docker run -d --name frontend -p 8080:80 ${FRONT_IMG}
