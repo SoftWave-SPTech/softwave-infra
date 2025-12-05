@@ -16,8 +16,9 @@ jobs:
       EC2_IP_B: ${{ secrets.EC2_IP_B }}
       FRONT_IMG: ${{ secrets.DOCKERHUB_USERNAME }}/react-front-end-repo:latest
       NGINX_IMG: ${{ secrets.DOCKERHUB_USERNAME }}/nginx-load-balancer:latest
+
     steps:
-      - name: Checkout repo (this repository = softwave-infra)
+      - name: Checkout repo (softwave-infra)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -39,7 +40,6 @@ jobs:
           TEMPLATE="nginx/nginx.conf"
           if [ ! -f "$TEMPLATE" ]; then
             echo "::error::Template not found at $TEMPLATE"
-            echo "Repository tree:"
             ls -R | sed -n '1,200p'
             exit 1
           fi
@@ -50,7 +50,6 @@ jobs:
 
       - name: Build Nginx Docker image (context = repo root)
         run: |
-          # build without sudo on the runner (ubuntu-latest has docker)
           docker build -f Dockerfile -t ${NGINX_IMG} .
 
       - name: Login to Docker Hub
@@ -62,33 +61,61 @@ jobs:
       - name: Push Nginx image to Docker Hub
         run: docker push ${NGINX_IMG}
 
-      - name: Remote debug / check docker on EC2_A (optional but helpful)
+      # --- Ensure Docker on EC2_A (optional safety step) ---
+      - name: Ensure Docker installed on EC2_A
         uses: appleboy/ssh-action@v0.1.8
         with:
           host: ${{ secrets.EC2_IP_A }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
+          timeout: 10m
+          command_timeout: 10m
           script: |
-            echo "=== remote debug for EC2_A ==="
-            hostname
-            whoami
-            echo "PATH=$PATH"
-            echo "which docker:"; command -v docker || echo "docker not found in PATH"
-            echo "possible locations:"
-            for p in /usr/bin/docker /usr/local/bin/docker /snap/bin/docker /bin/docker /usr/sbin/docker; do
-              if [ -x "$p" ]; then echo "FOUND $p"; else echo "not $p"; fi
-            done
-            echo "sudo which docker:"; sudo sh -c 'command -v docker || echo "docker not found for root"' || true
-            echo "ls -l /var/run/docker.sock:"; ls -l /var/run/docker.sock || true
+            set -euo pipefail
+            if ! command -v docker >/dev/null 2>&1; then
+              sudo apt-get update -y
+              sudo apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
+              sudo apt-get install -y docker.io
+              sudo systemctl enable --now docker
+            fi
+            sudo usermod -aG docker ubuntu || true
+            sudo chown root:docker /var/run/docker.sock || true
+            sudo chmod 660 /var/run/docker.sock || true
+            sudo docker run --rm hello-world || true
 
-      - name: Deploy Nginx on EC2_A (robust docker detection)
+      - name: Ensure Docker installed on EC2_B
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: ${{ secrets.EC2_IP_B }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          timeout: 10m
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            if ! command -v docker >/dev/null 2>&1; then
+              sudo apt-get update -y
+              sudo apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
+              sudo apt-get install -y docker.io
+              sudo systemctl enable --now docker
+            fi
+            sudo usermod -aG docker ubuntu || true
+            sudo chown root:docker /var/run/docker.sock || true
+            sudo chmod 660 /var/run/docker.sock || true
+            sudo docker run --rm hello-world || true
+
+      # --- Deploy Nginx on EC2_A (use runner interpolation) ---
+      - name: Deploy Nginx on EC2_A
         uses: appleboy/ssh-action@v0.1.8
         with:
           host: ${{ secrets.EC2_IP_A }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
+          timeout: 10m
+          command_timeout: 10m
           script: |
             set -euo pipefail
             echo "Searching docker binary..."
@@ -112,7 +139,6 @@ jobs:
                   echo "sudo docker works (will use sudo docker)"
                 else
                   echo "::error::Docker not found on host and sudo cannot run docker."
-                  echo "Run on the host: sudo apt-get update && sudo apt-get install -y docker.io"
                   exit 2
                 fi
               fi
@@ -120,28 +146,28 @@ jobs:
             echo "Using: ${SUDO_PREFIX:+$SUDO_PREFIX }$DOCKER_CMD"
             run_docker() {
               if [ -n "${SUDO_PREFIX:-}" ]; then
-                if [ "${DOCKER_CMD#/}" != "$DOCKER_CMD" ]; then
-                  sudo "$DOCKER_CMD" "$@"
-                else
-                  sudo docker "$@"
-                fi
+                if [ "${DOCKER_CMD#/}" != "$DOCKER_CMD" ]; then sudo "$DOCKER_CMD" "$@"; else sudo docker "$@"; fi
               else
                 "$DOCKER_CMD" "$@"
               fi
             }
-            run_docker pull ${NGINX_IMG}
+            # NOTE: variables below are expanded on the runner before being sent to the remote host
+            run_docker pull "${{ env.NGINX_IMG }}"
             run_docker stop nginx-load-balancer || true
             run_docker rm nginx-load-balancer || true
-            run_docker run -d --name nginx-load-balancer -p 80:80 --restart unless-stopped ${NGINX_IMG}
+            run_docker run -d --name nginx-load-balancer -p 80:80 --restart unless-stopped "${{ env.NGINX_IMG }}"
             run_docker ps --filter "name=nginx-load-balancer" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
-      - name: Deploy frontend on EC2_A (robust docker detection)
+      # --- Deploy frontend on EC2_A ---
+      - name: Deploy frontend on EC2_A
         uses: appleboy/ssh-action@v0.1.8
         with:
           host: ${{ secrets.EC2_IP_A }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
+          timeout: 10m
+          command_timeout: 10m
           script: |
             set -euo pipefail
             if command -v docker >/dev/null 2>&1; then DOCKER_CMD="$(command -v docker)"; SUDO_PREFIX=""; else
@@ -160,19 +186,22 @@ jobs:
                 "$DOCKER_CMD" "$@"
               fi
             }
-            run_docker pull ${FRONT_IMG}
+            run_docker pull "${{ env.FRONT_IMG }}"
             run_docker stop frontend || true
             run_docker rm frontend || true
-            run_docker run -d --name frontend -p 8080:80 --restart unless-stopped ${FRONT_IMG}
+            run_docker run -d --name frontend -p 8080:80 --restart unless-stopped "${{ env.FRONT_IMG }}"
             run_docker ps --filter "name=frontend" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
-      - name: Deploy frontend on EC2_B (robust docker detection)
+      # --- Deploy frontend on EC2_B ---
+      - name: Deploy frontend on EC2_B
         uses: appleboy/ssh-action@v0.1.8
         with:
           host: ${{ secrets.EC2_IP_B }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
+          timeout: 10m
+          command_timeout: 10m
           script: |
             set -euo pipefail
             if command -v docker >/dev/null 2>&1; then DOCKER_CMD="$(command -v docker)"; SUDO_PREFIX=""; else
@@ -191,8 +220,8 @@ jobs:
                 "$DOCKER_CMD" "$@"
               fi
             }
-            run_docker pull ${FRONT_IMG}
+            run_docker pull "${{ env.FRONT_IMG }}"
             run_docker stop frontend || true
             run_docker rm frontend || true
-            run_docker run -d --name frontend -p 8080:80 --restart unless-stopped ${FRONT_IMG}
+            run_docker run -d --name frontend -p 8080:80 --restart unless-stopped "${{ env.FRONT_IMG }}"
             run_docker ps --filter "name=frontend" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
