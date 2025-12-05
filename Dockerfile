@@ -1,12 +1,12 @@
-# Dockerfile do Load Balancer Nginx
+# softwave-infra/Dockerfile
 FROM nginx:alpine
 
-# Copia o arquivo de configuração personalizado
-COPY nginx.conf /etc/nginx/nginx.conf
+# Copia a pasta nginx (contendo nginx.conf) do contexto
+# OBS: caminho relativo ao build context (./softwave-infra)
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
 
-# Expor porta 80
+# opcional: copiar outros arquivos de sites, logs config etc.
+# COPY nginx/conf.d /etc/nginx/conf.d
+
 EXPOSE 80
-
-# Comando padrão
 CMD ["nginx", "-g", "daemon off;"]
-
