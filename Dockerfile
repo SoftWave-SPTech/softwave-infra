@@ -1,11 +1,13 @@
 # softwave-infra/Dockerfile
 FROM nginx:alpine
 
-# Copia a pasta nginx (contendo nginx.conf) do contexto
-# OBS: caminho relativo ao build context (./softwave-infra)
+# (Opcional) instalar curl útil para debug (mantém a imagem pequena)
+RUN apk add --no-cache curl
+
+# Copia a configuração principal (caminho relativo ao build context)
 COPY nginx/nginx.conf /etc/nginx/nginx.conf
 
-# opcional: copiar outros arquivos de sites, logs config etc.
+# Caso tenha arquivos adicionais (ex.: conf.d, certificados, sites), copie também:
 # COPY nginx/conf.d /etc/nginx/conf.d
 
 EXPOSE 80
