@@ -20,25 +20,29 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Install envsubst (gettext) for variable substitution
+      - name: Show repo tree (debug)
+        run: |
+          echo "=== files (first 200 lines) ==="
+          (ls -R || true) | sed -n '1,200p'
+
+      - name: Install envsubst (gettext)
         run: sudo apt-get update && sudo apt-get install -y gettext-base
 
-      - name: Prepare nginx.conf (inject EC2 IPs)
+      - name: Render nginx.conf (inject EC2 IPs)
         run: |
-          SRC_TEMPLATE="softwave-infra/nginx/nginx.conf"
-          if [ ! -f "$SRC_TEMPLATE" ]; then
-            echo "ERROR: template $SRC_TEMPLATE not found"; exit 1;
+          TEMPLATE="softwave-infra/nginx/nginx.conf"
+          if [ ! -f "$TEMPLATE" ]; then
+            echo "::error::Template not found at $TEMPLATE"; ls -la softwave-infra || true; exit 1
           fi
-          # renderiza para arquivo final no mesmo local
-          envsubst '${EC2_IP_A} ${EC2_IP_B}' < "$SRC_TEMPLATE" > "${SRC_TEMPLATE}.rendered"
-          mv "${SRC_TEMPLATE}.rendered" "${SRC_TEMPLATE}"
-          echo "Rendered nginx.conf (first 60 lines):"
-          sed -n '1,60p' "${SRC_TEMPLATE}"
+          envsubst '${EC2_IP_A} ${EC2_IP_B}' < "$TEMPLATE" > "${TEMPLATE}.rendered"
+          mv "${TEMPLATE}.rendered" "$TEMPLATE"
+          echo "Rendered $TEMPLATE (head):"; sed -n '1,80p' "$TEMPLATE"
 
       - name: Build Docker image (context = softwave-infra)
         run: |
-          # build usando Dockerfile em softwave-infra/Dockerfile e context ./softwave-infra
           docker build -f softwave-infra/Dockerfile -t ${DOCKERHUB_USER}/nginx-load-balancer:latest ./softwave-infra
 
       - name: Login to Docker Hub
@@ -48,10 +52,9 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Push Docker image
-        run: |
-          docker push ${DOCKERHUB_USER}/nginx-load-balancer:latest
+        run: docker push ${DOCKERHUB_USER}/nginx-load-balancer:latest
 
-      - name: Deploy image to EC2 (EC2_IP_A)
+      - name: Deploy to EC2 (EC2_IP_A)
         uses: appleboy/ssh-action@v0.1.8
         with:
           host: ${{ secrets.EC2_IP_A }}
